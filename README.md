@@ -34,6 +34,15 @@ docker build -t mock-vllm .
 docker run --rm -p 8000:8000 mock-vllm
 ```
 
+Pushes to `main` publish a tested image to GitHub Container Registry after CI passes:
+
+```bash
+docker pull ghcr.io/beranekio/mock-vllm:latest
+docker run --rm -p 8000:8000 ghcr.io/beranekio/mock-vllm:latest
+```
+
+Tags: `latest`, the short commit SHA, and `main`. On first publish, set the package visibility to **Public** under the repo’s **Packages** settings if you need anonymous pulls.
+
 ### Integration tests
 
 SDK integration tests use the official [OpenAI Go SDK](https://github.com/openai/openai-go) and [Anthropic Go SDK](https://github.com/anthropics/anthropic-sdk-go). By default they spin up an in-process `httptest` server; set `INTEGRATION_BASE_URL` to test a running instance (e.g. Docker):
@@ -84,7 +93,7 @@ go test -race ./...
 gofmt -w .
 ```
 
-CI runs unit tests, SDK integration tests (in-process), and Docker integration tests on every push/PR to `main`.
+CI runs unit tests, SDK integration tests (in-process), and Docker integration tests on every push/PR to `main`. Successful merges to `main` also trigger a GHCR publish workflow (`.github/workflows/publish-docker.yml`).
 
 ## License
 
