@@ -27,6 +27,11 @@ go.work.sum
 # env file
 .env
 
+# Build artifacts
+/mock-vllm
+/bin/
+/dist/
+
 # Editor/IDE
 # .idea/
 # .vscode/
