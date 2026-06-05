@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   publish:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,6 +23,19 @@ jobs:
 
       - name: Set image name
         run: echo "IMAGE_NAME=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Resolve publish tags
+        id: tags
+        run: |
+          git fetch --no-tags --depth=1 origin main
+          main_sha=$(git rev-parse FETCH_HEAD)
+          head_sha=$(git rev-parse HEAD)
+          echo "short_sha=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$head_sha" = "$main_sha" ]; then
+            echo "is_main_tip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_main_tip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: docker/setup-buildx-action@v3
 
@@ -36,9 +51,9 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
-            type=sha,prefix=,format=short
-            type=ref,event=branch
+            type=raw,value=${{ steps.tags.outputs.short_sha }}
+            type=raw,value=latest,enable=${{ steps.tags.outputs.is_main_tip == 'true' }}
+            type=raw,value=main,enable=${{ steps.tags.outputs.is_main_tip == 'true' }}
 
       - uses: docker/build-push-action@v6
         with:
