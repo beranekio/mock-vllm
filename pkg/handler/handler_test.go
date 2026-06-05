@@ -180,6 +180,53 @@ func TestChatCompletionsStream_utf8(t *testing.T) {
 	}
 }
 
+func TestResponsesInputTokens_fromPayload(t *testing.T) {
+	s := newTestServer()
+	short := `{"input":"hi"}`
+	long := `{"input":"` + strings.Repeat("z", 200) + `"}`
+
+	reqShort := httptest.NewRequest(http.MethodPost, "/v1/responses/input_tokens", strings.NewReader(short))
+	recShort := httptest.NewRecorder()
+	s.ServeHTTP(recShort, reqShort)
+
+	reqLong := httptest.NewRequest(http.MethodPost, "/v1/responses/input_tokens", strings.NewReader(long))
+	recLong := httptest.NewRecorder()
+	s.ServeHTTP(recLong, reqLong)
+
+	var respShort, respLong map[string]any
+	_ = json.NewDecoder(recShort.Body).Decode(&respShort)
+	_ = json.NewDecoder(recLong.Body).Decode(&respLong)
+
+	if respLong["input_tokens"].(float64) <= respShort["input_tokens"].(float64) {
+		t.Fatalf("long=%v short=%v", respLong["input_tokens"], respShort["input_tokens"])
+	}
+}
+
+func TestMessagesCountTokens_includesSystem(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","system":"` + strings.Repeat("a", 400) + `","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var withSystem map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&withSystem); err != nil {
+		t.Fatal(err)
+	}
+
+	bodyMinimal := `{"model":"test-model","messages":[{"role":"user","content":"hi"}]}`
+	req2 := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", strings.NewReader(bodyMinimal))
+	rec2 := httptest.NewRecorder()
+	s.ServeHTTP(rec2, req2)
+
+	var minimal map[string]any
+	_ = json.NewDecoder(rec2.Body).Decode(&minimal)
+
+	if withSystem["input_tokens"].(float64) <= minimal["input_tokens"].(float64) {
+		t.Fatalf("with system=%v minimal=%v", withSystem["input_tokens"], minimal["input_tokens"])
+	}
+}
+
 func TestMessagesAnthropic(t *testing.T) {
 	s := newTestServer()
 	body := `{"model":"test-model","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}`

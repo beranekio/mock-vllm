@@ -1,6 +1,7 @@
 package text
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -99,6 +100,38 @@ func TestChunk_utf8(t *testing.T) {
 		if !utf8.ValidString(c) {
 			t.Fatalf("invalid UTF-8 chunk: %q", c)
 		}
+	}
+}
+
+func TestExtractTokenCountText_includesSystemAndHistory(t *testing.T) {
+	longSystem := strings.Repeat("a", 400)
+	payload := map[string]any{
+		"system": longSystem,
+		"messages": []any{
+			map[string]any{"role": "user", "content": "hi"},
+			map[string]any{"role": "assistant", "content": "bye"},
+			map[string]any{"role": "user", "content": "again"},
+		},
+	}
+	got := ExtractTokenCountText(payload)
+	if !strings.Contains(got, longSystem) {
+		t.Fatal("missing system text")
+	}
+	if !strings.Contains(got, "bye") {
+		t.Fatal("missing assistant history")
+	}
+	full, _ := Usage(got, "")
+	lastUser, _ := Usage(ExtractInput(payload), "")
+	if full <= lastUser {
+		t.Fatalf("full count %d should exceed last-user-only %d", full, lastUser)
+	}
+}
+
+func TestExtractTokenCountText_scalesWithInputSize(t *testing.T) {
+	inShort, _ := Usage(ExtractTokenCountText(map[string]any{"input": "hi"}), "")
+	inLong, _ := Usage(ExtractTokenCountText(map[string]any{"input": strings.Repeat("z", 200)}), "")
+	if inLong <= inShort {
+		t.Fatalf("long=%d short=%d", inLong, inShort)
 	}
 }
 

@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -87,5 +88,36 @@ func TestAnthropic_CountTokens(t *testing.T) {
 	}
 	if count.InputTokens <= 0 {
 		t.Fatalf("input_tokens = %d, want > 0", count.InputTokens)
+	}
+}
+
+func TestAnthropic_CountTokens_includesSystem(t *testing.T) {
+	ctx := context.Background()
+	client := anthropicClient(t)
+
+	minimal, err := client.Messages.CountTokens(ctx, anthropic.MessageCountTokensParams{
+		Model: testModel,
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Messages.CountTokens: %v", err)
+	}
+
+	withSystem, err := client.Messages.CountTokens(ctx, anthropic.MessageCountTokensParams{
+		Model: testModel,
+		System: anthropic.MessageCountTokensParamsSystemUnion{
+			OfString: anthropic.String(strings.Repeat("a", 400)),
+		},
+		Messages: []anthropic.MessageParam{
+			anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Messages.CountTokens with system: %v", err)
+	}
+	if withSystem.InputTokens <= minimal.InputTokens {
+		t.Fatalf("with system=%d minimal=%d", withSystem.InputTokens, minimal.InputTokens)
 	}
 }

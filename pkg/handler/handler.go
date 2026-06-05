@@ -88,7 +88,7 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	case "/v1/responses":
 		s.responses(w, payload)
 	case "/v1/responses/input_tokens":
-		s.inputTokens(w)
+		s.inputTokens(w, payload)
 	case "/v1/messages":
 		s.messages(w, payload)
 	case "/v1/messages/count_tokens":
@@ -115,12 +115,12 @@ func (s *Server) listModels(w http.ResponseWriter) {
 	})
 }
 
-func (s *Server) inputTokens(w http.ResponseWriter) {
-	httpjson.Write(w, http.StatusOK, map[string]int{"input_tokens": 12})
+func (s *Server) inputTokens(w http.ResponseWriter, payload map[string]any) {
+	in, _ := text.Usage(text.ExtractTokenCountText(payload), "")
+	httpjson.Write(w, http.StatusOK, map[string]int{"input_tokens": in})
 }
 
 func (s *Server) countTokens(w http.ResponseWriter, payload map[string]any) {
-	input := text.ExtractInput(payload)
-	in, _ := text.Usage(input, "")
+	in, _ := text.Usage(text.ExtractTokenCountText(payload), "")
 	httpjson.Write(w, http.StatusOK, map[string]int{"input_tokens": in})
 }

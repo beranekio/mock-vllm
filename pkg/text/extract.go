@@ -98,6 +98,81 @@ func extractFromInputArray(items []any) string {
 	return ""
 }
 
+// ExtractTokenCountText collects all prompt text for token-count endpoints.
+func ExtractTokenCountText(payload map[string]any) string {
+	var parts []string
+
+	if sys := extractSystem(payload["system"]); sys != "" {
+		parts = append(parts, sys)
+	}
+	if v, ok := payload["input"].(string); ok && v != "" {
+		parts = append(parts, v)
+	}
+	if v, ok := payload["prompt"].(string); ok && v != "" {
+		parts = append(parts, v)
+	}
+	if msgs, ok := payload["messages"].([]any); ok {
+		if t := extractAllMessagesText(msgs); t != "" {
+			parts = append(parts, t)
+		}
+	}
+	if input, ok := payload["input"].([]any); ok {
+		parts = append(parts, extractTokenCountFromInputArray(input)...)
+	}
+	if prompts, ok := payload["prompt"].([]any); ok {
+		for _, item := range prompts {
+			if s, ok := item.(string); ok && s != "" {
+				parts = append(parts, s)
+			}
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func extractTokenCountFromInputArray(items []any) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	if _, ok := items[0].(map[string]any); ok {
+		if t := extractAllMessagesText(items); t != "" {
+			return []string{t}
+		}
+		return nil
+	}
+	var parts []string
+	for _, item := range items {
+		if s, ok := item.(string); ok && s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return parts
+}
+
+func extractSystem(system any) string {
+	switch s := system.(type) {
+	case string:
+		return s
+	case []any:
+		return extractContentBlocks(s)
+	default:
+		return ""
+	}
+}
+
+func extractAllMessagesText(msgs []any) string {
+	var parts []string
+	for _, m := range msgs {
+		msg, ok := m.(map[string]any)
+		if !ok {
+			continue
+		}
+		if t := extractMessageContent(msg["content"]); t != "" {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
 func extractLastUserText(msgs []any) string {
 	var last string
 	for _, m := range msgs {
