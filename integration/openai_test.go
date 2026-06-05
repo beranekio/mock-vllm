@@ -53,6 +53,31 @@ func TestOpenAI_ChatCompletions(t *testing.T) {
 	}
 }
 
+func TestOpenAI_ChatCompletions_multiTurn(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Model: testModel,
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{
+				OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+					Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+						OfString: openai.String("goodbye"),
+					},
+				},
+			},
+			openai.UserMessage("hi"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat.Completions.New: %v", err)
+	}
+	if got := resp.Choices[0].Message.Content; got != "hi" {
+		t.Fatalf("content = %q, want hi", got)
+	}
+}
+
 func TestOpenAI_ChatCompletionsStream(t *testing.T) {
 	ctx := context.Background()
 	client := openAIClient(t)
@@ -115,5 +140,26 @@ func TestOpenAI_Embeddings(t *testing.T) {
 	}
 	if len(resp.Data) == 0 || len(resp.Data[0].Embedding) == 0 {
 		t.Fatalf("unexpected embedding response: %+v", resp)
+	}
+}
+
+func TestOpenAI_Embeddings_batch(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Model: testModel,
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfArrayOfStrings: []string{"a", "b"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Embeddings.New: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("len(data) = %d, want 2", len(resp.Data))
+	}
+	if resp.Data[0].Index != 0 || resp.Data[1].Index != 1 {
+		t.Fatalf("unexpected indices: %d, %d", resp.Data[0].Index, resp.Data[1].Index)
 	}
 }

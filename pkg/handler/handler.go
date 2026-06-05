@@ -61,7 +61,11 @@ func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if text.ShouldDelay(raw, s.cfg.SlowMarkers) {
-		time.Sleep(s.cfg.SlowDelay)
+		select {
+		case <-time.After(s.cfg.SlowDelay):
+		case <-r.Context().Done():
+			return
+		}
 	}
 
 	payload, err := text.ParsePayload(raw)

@@ -72,7 +72,7 @@ func (s *Server) streamAnthropicMessages(w http.ResponseWriter, model, reply str
 	})
 	flusher.Flush()
 
-	for _, part := range chunkText(reply, 4) {
+	for _, part := range text.Chunk(reply, 4) {
 		writeAnthropicEvent(w, "content_block_delta", map[string]any{
 			"type":  "content_block_delta",
 			"index": 0,

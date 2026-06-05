@@ -2,12 +2,15 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/beranekio/mock-vllm/pkg/config"
 )
@@ -59,6 +62,96 @@ func TestChatCompletions(t *testing.T) {
 	choices, ok := resp["choices"].([]any)
 	if !ok || len(choices) == 0 {
 		t.Fatalf("missing choices: %v", resp)
+	}
+}
+
+func TestChatCompletions_multiTurn(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","messages":[
+		{"role":"assistant","content":"goodbye"},
+		{"role":"user","content":"hi"}
+	]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	choice := resp["choices"].([]any)[0].(map[string]any)
+	msg := choice["message"].(map[string]any)
+	if msg["content"] != "hi" {
+		t.Fatalf("content = %v, want hi", msg["content"])
+	}
+}
+
+func TestEmbeddings_batch(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","input":["a","b"]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	data, ok := resp["data"].([]any)
+	if !ok || len(data) != 2 {
+		t.Fatalf("data = %v, want 2 embeddings", resp["data"])
+	}
+}
+
+func TestResponses_structuredInput(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	output := resp["output"].([]any)[0].(map[string]any)
+	content := output["content"].([]any)[0].(map[string]any)
+	if content["text"] != "hi" {
+		t.Fatalf("text = %v, want hi", content["text"])
+	}
+}
+
+func TestSlowDelay_respectsContextCancel(t *testing.T) {
+	s := New(config.Config{
+		DefaultModel: "test-model",
+		SlowMarkers:  []string{"slow"},
+		SlowDelay:    5 * time.Second,
+		LogRequests:  false,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	body := `{"model":"test-model","input":"trigger slow marker"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body)).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	s.ServeHTTP(rec, req)
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("handler blocked %v after context cancel", elapsed)
+	}
+}
+
+func TestChatCompletionsStream_utf8(t *testing.T) {
+	s := New(config.Config{DefaultModel: "test-model", ResponsePrefix: "日本語"})
+	body := `{"model":"test-model","stream":true,"messages":[{"role":"user","content":"x"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	out, _ := io.ReadAll(rec.Body)
+	if !utf8.Valid(out) {
+		t.Fatal("stream body is not valid UTF-8")
 	}
 }
 

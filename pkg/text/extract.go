@@ -21,7 +21,7 @@ func Reply(payload map[string]any, prefix string) string {
 	}
 }
 
-// ExtractInput collects user-visible text from OpenAI or Anthropic request bodies.
+// ExtractInput collects text from the latest user turn in OpenAI or Anthropic bodies.
 func ExtractInput(payload map[string]any) string {
 	if v, ok := payload["input"].(string); ok && v != "" {
 		return v
@@ -30,36 +30,89 @@ func ExtractInput(payload map[string]any) string {
 		return v
 	}
 	if msgs, ok := payload["messages"].([]any); ok {
-		return extractFromMessages(msgs)
+		return extractLastUserText(msgs)
+	}
+	if input, ok := payload["input"].([]any); ok {
+		return extractFromInputArray(input)
 	}
 	return ""
 }
 
-func extractFromMessages(msgs []any) string {
-	var parts []string
+// ExtractEmbeddingInputs returns one string per embedding input (string or array).
+func ExtractEmbeddingInputs(payload map[string]any) []string {
+	switch v := payload["input"].(type) {
+	case string:
+		if v != "" {
+			return []string{v}
+		}
+	case []any:
+		var inputs []string
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				inputs = append(inputs, s)
+			}
+		}
+		if len(inputs) > 0 {
+			return inputs
+		}
+	}
+	text := ExtractInput(payload)
+	if text == "" {
+		text = "mock"
+	}
+	return []string{text}
+}
+
+func extractFromInputArray(items []any) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if _, ok := items[0].(map[string]any); ok {
+		return extractLastUserText(items)
+	}
+	return ""
+}
+
+func extractLastUserText(msgs []any) string {
+	var last string
 	for _, m := range msgs {
 		msg, ok := m.(map[string]any)
 		if !ok {
 			continue
 		}
-		content := msg["content"]
-		switch c := content.(type) {
-		case string:
-			if c != "" {
-				parts = append(parts, c)
-			}
-		case []any:
-			for _, block := range c {
-				b, ok := block.(map[string]any)
-				if !ok {
-					continue
-				}
-				switch blockType, _ := b["type"].(string); blockType {
-				case "text", "input_text":
-					if t, _ := b["text"].(string); t != "" {
-						parts = append(parts, t)
-					}
-				}
+		role, _ := msg["role"].(string)
+		if role != "user" {
+			continue
+		}
+		if t := extractMessageContent(msg["content"]); t != "" {
+			last = t
+		}
+	}
+	return last
+}
+
+func extractMessageContent(content any) string {
+	switch c := content.(type) {
+	case string:
+		return c
+	case []any:
+		return extractContentBlocks(c)
+	default:
+		return ""
+	}
+}
+
+func extractContentBlocks(blocks []any) string {
+	var parts []string
+	for _, block := range blocks {
+		b, ok := block.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch blockType, _ := b["type"].(string); blockType {
+		case "text", "input_text":
+			if t, _ := b["text"].(string); t != "" {
+				parts = append(parts, t)
 			}
 		}
 	}

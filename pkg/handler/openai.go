@@ -79,30 +79,33 @@ func (s *Server) completions(w http.ResponseWriter, payload map[string]any) {
 
 func (s *Server) embeddings(w http.ResponseWriter, payload map[string]any) {
 	model := text.Model(payload, s.cfg.DefaultModel)
-	input := text.ExtractInput(payload)
-	if input == "" {
-		input = "mock"
-	}
+	inputs := text.ExtractEmbeddingInputs(payload)
 
 	dim := 8
-	vec := make([]float64, dim)
-	for i := range vec {
-		vec[i] = float64((int(input[0])+i)%7) / 7.0
+	data := make([]map[string]any, len(inputs))
+	for i, input := range inputs {
+		vec := make([]float64, dim)
+		seed := byte('m')
+		if len(input) > 0 {
+			seed = input[0]
+		}
+		for j := range vec {
+			vec[j] = float64((int(seed)+j)%7) / 7.0
+		}
+		data[i] = map[string]any{
+			"object":    "embedding",
+			"index":     i,
+			"embedding": vec,
+		}
 	}
 
 	httpjson.Write(w, http.StatusOK, map[string]any{
 		"object": "list",
-		"data": []map[string]any{
-			{
-				"object":    "embedding",
-				"index":     0,
-				"embedding": vec,
-			},
-		},
-		"model": model,
+		"data":   data,
+		"model":  model,
 		"usage": map[string]int{
-			"prompt_tokens": 4,
-			"total_tokens":  4,
+			"prompt_tokens": len(inputs) * 4,
+			"total_tokens":  len(inputs) * 4,
 		},
 	})
 }
@@ -141,7 +144,7 @@ func (s *Server) streamOpenAIChat(w http.ResponseWriter, model, reply string) {
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	chunks := chunkText(reply, 4)
+	chunks := text.Chunk(reply, 4)
 	if len(chunks) == 0 {
 		chunks = []string{""}
 	}
@@ -188,7 +191,7 @@ func (s *Server) streamOpenAICompletion(w http.ResponseWriter, model, reply stri
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	for _, part := range chunkText(reply, 4) {
+	for _, part := range text.Chunk(reply, 4) {
 		writeSSE(w, map[string]any{
 			"id": id, "object": "text_completion", "model": model,
 			"choices": []map[string]any{{
@@ -210,22 +213,4 @@ func (s *Server) streamOpenAICompletion(w http.ResponseWriter, model, reply stri
 
 func idSuffix() string {
 	return strings.ReplaceAll(uuid.New().String(), "-", "")
-}
-
-func chunkText(s string, size int) []string {
-	if s == "" {
-		return nil
-	}
-	if size < 1 {
-		size = 1
-	}
-	var chunks []string
-	for i := 0; i < len(s); i += size {
-		end := i + size
-		if end > len(s) {
-			end = len(s)
-		}
-		chunks = append(chunks, s[i:end])
-	}
-	return chunks
 }
