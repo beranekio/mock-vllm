@@ -63,6 +63,19 @@ func TestExtractInput_responsesStructured(t *testing.T) {
 	}
 }
 
+func TestExtractCompletionPrompts_batch(t *testing.T) {
+	payload := map[string]any{
+		"prompt": []any{"hi", "bye"},
+	}
+	got := ExtractCompletionPrompts(payload)
+	if len(got) != 2 || got[0] != "hi" || got[1] != "bye" {
+		t.Fatalf("ExtractCompletionPrompts() = %v", got)
+	}
+	if ReplyText(got[0], "") != "hi" || ReplyText(got[1], "") != "bye" {
+		t.Fatalf("unexpected replies for batch prompts")
+	}
+}
+
 func TestExtractEmbeddingInputs_batch(t *testing.T) {
 	payload := map[string]any{
 		"input": []any{"a", "b"},

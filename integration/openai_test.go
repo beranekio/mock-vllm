@@ -125,6 +125,30 @@ func TestOpenAI_Completions(t *testing.T) {
 	}
 }
 
+func TestOpenAI_Completions_batch(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Completions.New(ctx, openai.CompletionNewParams{
+		Model: testModel,
+		Prompt: openai.CompletionNewParamsPromptUnion{
+			OfArrayOfStrings: []string{"hi", "bye"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Completions.New: %v", err)
+	}
+	if len(resp.Choices) != 2 {
+		t.Fatalf("len(choices) = %d, want 2", len(resp.Choices))
+	}
+	if resp.Choices[0].Text != "hi" || resp.Choices[1].Text != "bye" {
+		t.Fatalf("texts = %q, %q", resp.Choices[0].Text, resp.Choices[1].Text)
+	}
+	if resp.Choices[0].Index != 0 || resp.Choices[1].Index != 1 {
+		t.Fatalf("indices = %d, %d", resp.Choices[0].Index, resp.Choices[1].Index)
+	}
+}
+
 func TestOpenAI_Embeddings(t *testing.T) {
 	ctx := context.Background()
 	client := openAIClient(t)

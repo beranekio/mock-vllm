@@ -48,13 +48,26 @@ func (s *Server) chatCompletions(w http.ResponseWriter, payload map[string]any) 
 
 func (s *Server) completions(w http.ResponseWriter, payload map[string]any) {
 	model := text.Model(payload, s.cfg.DefaultModel)
-	reply := text.Reply(payload, s.cfg.ResponsePrefix)
-	input := text.ExtractInput(payload)
-	inTok, outTok := text.Usage(input, reply)
+	prompts := text.ExtractCompletionPrompts(payload)
 
 	if text.StreamRequested(payload) {
+		reply := text.ReplyText(prompts[0], s.cfg.ResponsePrefix)
 		s.streamOpenAICompletion(w, model, reply)
 		return
+	}
+
+	choices := make([]map[string]any, len(prompts))
+	var totalIn, totalOut int
+	for i, prompt := range prompts {
+		reply := text.ReplyText(prompt, s.cfg.ResponsePrefix)
+		inTok, outTok := text.Usage(prompt, reply)
+		totalIn += inTok
+		totalOut += outTok
+		choices[i] = map[string]any{
+			"index":         i,
+			"text":          reply,
+			"finish_reason": "stop",
+		}
 	}
 
 	httpjson.Write(w, http.StatusOK, map[string]any{
@@ -62,17 +75,11 @@ func (s *Server) completions(w http.ResponseWriter, payload map[string]any) {
 		"object":  "text_completion",
 		"created": time.Now().Unix(),
 		"model":   model,
-		"choices": []map[string]any{
-			{
-				"index":         0,
-				"text":          reply,
-				"finish_reason": "stop",
-			},
-		},
+		"choices": choices,
 		"usage": map[string]int{
-			"prompt_tokens":     inTok,
-			"completion_tokens": outTok,
-			"total_tokens":      inTok + outTok,
+			"prompt_tokens":     totalIn,
+			"completion_tokens": totalOut,
+			"total_tokens":      totalIn + totalOut,
 		},
 	})
 }

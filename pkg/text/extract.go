@@ -7,7 +7,11 @@ import (
 
 // Reply derives mock assistant text from request payload content.
 func Reply(payload map[string]any, prefix string) string {
-	raw := ExtractInput(payload)
+	return ReplyText(ExtractInput(payload), prefix)
+}
+
+// ReplyText applies deterministic mock reply rules to a single user text string.
+func ReplyText(raw, prefix string) string {
 	lowered := strings.ToLower(raw)
 	switch {
 	case strings.Contains(lowered, "bye"):
@@ -36,6 +40,27 @@ func ExtractInput(payload map[string]any) string {
 		return extractFromInputArray(input)
 	}
 	return ""
+}
+
+// ExtractCompletionPrompts returns one string per completions prompt (string or array).
+func ExtractCompletionPrompts(payload map[string]any) []string {
+	switch v := payload["prompt"].(type) {
+	case string:
+		if v != "" {
+			return []string{v}
+		}
+	case []any:
+		var prompts []string
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				prompts = append(prompts, s)
+			}
+		}
+		if len(prompts) > 0 {
+			return prompts
+		}
+	}
+	return []string{"mock"}
 }
 
 // ExtractEmbeddingInputs returns one string per embedding input (string or array).

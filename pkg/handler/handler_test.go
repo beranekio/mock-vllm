@@ -86,6 +86,31 @@ func TestChatCompletions_multiTurn(t *testing.T) {
 	}
 }
 
+func TestCompletions_batch(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","prompt":["hi","bye"]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	choices, ok := resp["choices"].([]any)
+	if !ok || len(choices) != 2 {
+		t.Fatalf("choices = %v, want 2", resp["choices"])
+	}
+	c0 := choices[0].(map[string]any)
+	c1 := choices[1].(map[string]any)
+	if c0["text"] != "hi" || c1["text"] != "bye" {
+		t.Fatalf("texts = %v, %v", c0["text"], c1["text"])
+	}
+	if c0["index"].(float64) != 0 || c1["index"].(float64) != 1 {
+		t.Fatalf("indices = %v, %v", c0["index"], c1["index"])
+	}
+}
+
 func TestEmbeddings_batch(t *testing.T) {
 	s := newTestServer()
 	body := `{"model":"test-model","input":["a","b"]}`
