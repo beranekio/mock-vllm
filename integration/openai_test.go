@@ -6,6 +6,7 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/responses"
 )
 
 func openAIClient(t *testing.T) openai.Client {
@@ -164,6 +165,73 @@ func TestOpenAI_Embeddings(t *testing.T) {
 	}
 	if len(resp.Data) == 0 || len(resp.Data[0].Embedding) == 0 {
 		t.Fatalf("unexpected embedding response: %+v", resp)
+	}
+}
+
+func TestOpenAI_Responses(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Model: testModel,
+		Input: responses.ResponseNewParamsInputUnion{
+			OfString: openai.String("hi"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Responses.New: %v", err)
+	}
+	if resp.Status != responses.ResponseStatusCompleted {
+		t.Fatalf("status = %q, want completed", resp.Status)
+	}
+	if got := resp.OutputText(); got != "hi" {
+		t.Fatalf("output text = %q, want hi", got)
+	}
+}
+
+func TestOpenAI_Responses_structuredInput(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Model: testModel,
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam{
+				responses.ResponseInputItemParamOfMessage(
+					responses.ResponseInputMessageContentListParam{
+						responses.ResponseInputContentParamOfInputText("hi"),
+					},
+					responses.EasyInputMessageRoleUser,
+				),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Responses.New: %v", err)
+	}
+	if got := resp.OutputText(); got != "hi" {
+		t.Fatalf("output text = %q, want hi", got)
+	}
+}
+
+func TestOpenAI_Responses_multiTurn(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Model: testModel,
+		Input: responses.ResponseNewParamsInputUnion{
+			OfInputItemList: responses.ResponseInputParam{
+				responses.ResponseInputItemParamOfMessage("goodbye", responses.EasyInputMessageRoleAssistant),
+				responses.ResponseInputItemParamOfMessage("hi", responses.EasyInputMessageRoleUser),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Responses.New: %v", err)
+	}
+	if got := resp.OutputText(); got != "hi" {
+		t.Fatalf("output text = %q, want hi", got)
 	}
 }
 
