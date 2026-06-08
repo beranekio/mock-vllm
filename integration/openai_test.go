@@ -255,3 +255,60 @@ func TestOpenAI_Embeddings_batch(t *testing.T) {
 		t.Fatalf("unexpected indices: %d, %d", resp.Data[0].Index, resp.Data[1].Index)
 	}
 }
+
+func TestOpenAI_Embeddings_tokenBatches(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Model: testModel,
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfArrayOfTokenArrays: [][]int64{{1, 2}, {3, 4}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Embeddings.New: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("len(data) = %d, want 2", len(resp.Data))
+	}
+	if resp.Data[0].Index != 0 || resp.Data[1].Index != 1 {
+		t.Fatalf("unexpected indices: %d, %d", resp.Data[0].Index, resp.Data[1].Index)
+	}
+}
+
+func TestOpenAI_CompletionsStream_batch(t *testing.T) {
+	ctx := context.Background()
+	client := openAIClient(t)
+
+	stream := client.Completions.NewStreaming(ctx, openai.CompletionNewParams{
+		Model: testModel,
+		Prompt: openai.CompletionNewParamsPromptUnion{
+			OfArrayOfStrings: []string{"hi", "bye"},
+		},
+	})
+
+	byIndex := map[int64]string{}
+	var finishIndices []int64
+	for stream.Next() {
+		chunk := stream.Current()
+		for _, choice := range chunk.Choices {
+			byIndex[choice.Index] += choice.Text
+			if choice.FinishReason != "" {
+				finishIndices = append(finishIndices, choice.Index)
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := byIndex[0]; got != "hi" {
+		t.Fatalf("index 0 text = %q, want hi", got)
+	}
+	if got := byIndex[1]; got != "bye" {
+		t.Fatalf("index 1 text = %q, want bye", got)
+	}
+	if len(finishIndices) != 2 {
+		t.Fatalf("finish indices = %v, want 2", finishIndices)
+	}
+}

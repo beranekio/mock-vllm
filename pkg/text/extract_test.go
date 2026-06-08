@@ -82,8 +82,37 @@ func TestExtractEmbeddingInputs_batch(t *testing.T) {
 		"input": []any{"a", "b"},
 	}
 	got := ExtractEmbeddingInputs(payload)
-	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+	if len(got) != 2 || got[0].Text != "a" || got[1].Text != "b" {
 		t.Fatalf("ExtractEmbeddingInputs() = %v", got)
+	}
+}
+
+func TestExtractEmbeddingInputs_tokenArray(t *testing.T) {
+	payload := map[string]any{
+		"input": []any{float64(1), float64(2), float64(3)},
+	}
+	got := ExtractEmbeddingInputs(payload)
+	if len(got) != 1 || len(got[0].Tokens) != 3 || got[0].Tokens[0] != 1 {
+		t.Fatalf("ExtractEmbeddingInputs() = %v", got)
+	}
+}
+
+func TestExtractEmbeddingInputs_tokenBatches(t *testing.T) {
+	payload := map[string]any{
+		"input": []any{
+			[]any{float64(1), float64(2)},
+			[]any{float64(3), float64(4)},
+		},
+	}
+	got := ExtractEmbeddingInputs(payload)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2", len(got))
+	}
+	if len(got[0].Tokens) != 2 || got[0].Tokens[0] != 1 || got[0].Tokens[1] != 2 {
+		t.Fatalf("batch[0] = %v", got[0].Tokens)
+	}
+	if len(got[1].Tokens) != 2 || got[1].Tokens[0] != 3 || got[1].Tokens[1] != 4 {
+		t.Fatalf("batch[1] = %v", got[1].Tokens)
 	}
 }
 
