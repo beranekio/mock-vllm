@@ -19,6 +19,8 @@ Lightweight mock of the [vLLM OpenAI-compatible server](https://docs.vllm.ai/en/
 
 Responses are deterministic: user text containing `hi`/`hello` → `hi`, `bye` → `bye`, otherwise `ok`. Optional slow responses when the request body contains configured markers (default: `otter`, `long story`).
 
+Batched `/v1/completions` and `/v1/embeddings` requests return one choice or embedding per array element with matching `index` values, including when `stream: true` for completions. Embeddings accept string batches (`["a","b"]`), a single token array (`[1,2,3]`), or batched token arrays (`[[1,2],[3,4]]`); mock vectors are seeded deterministically from text or token IDs.
+
 ## Quick start
 
 ### Local binary

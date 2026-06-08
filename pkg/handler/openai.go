@@ -51,8 +51,7 @@ func (s *Server) completions(w http.ResponseWriter, payload map[string]any) {
 	prompts := text.ExtractCompletionPrompts(payload)
 
 	if text.StreamRequested(payload) {
-		reply := text.ReplyText(prompts[0], s.cfg.ResponsePrefix)
-		s.streamOpenAICompletion(w, model, reply)
+		s.streamOpenAICompletion(w, model, prompts)
 		return
 	}
 
@@ -90,12 +89,11 @@ func (s *Server) embeddings(w http.ResponseWriter, payload map[string]any) {
 
 	dim := 8
 	data := make([]map[string]any, len(inputs))
+	var totalTokens int
 	for i, input := range inputs {
+		totalTokens += input.TokenCount()
 		vec := make([]float64, dim)
-		seed := byte('m')
-		if len(input) > 0 {
-			seed = input[0]
-		}
+		seed := input.Seed()
 		for j := range vec {
 			vec[j] = float64((int(seed)+j)%7) / 7.0
 		}
@@ -111,8 +109,8 @@ func (s *Server) embeddings(w http.ResponseWriter, payload map[string]any) {
 		"data":   data,
 		"model":  model,
 		"usage": map[string]int{
-			"prompt_tokens": len(inputs) * 4,
-			"total_tokens":  len(inputs) * 4,
+			"prompt_tokens": totalTokens,
+			"total_tokens":  totalTokens,
 		},
 	})
 }
@@ -185,7 +183,7 @@ func (s *Server) streamOpenAIChat(w http.ResponseWriter, model, reply string) {
 	flusher.Flush()
 }
 
-func (s *Server) streamOpenAICompletion(w http.ResponseWriter, model, reply string) {
+func (s *Server) streamOpenAICompletion(w http.ResponseWriter, model string, prompts []string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		httpjson.Error(w, http.StatusInternalServerError, "streaming not supported")
@@ -198,22 +196,29 @@ func (s *Server) streamOpenAICompletion(w http.ResponseWriter, model, reply stri
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
-	for _, part := range text.Chunk(reply, 4) {
+	for i, prompt := range prompts {
+		reply := text.ReplyText(prompt, s.cfg.ResponsePrefix)
+		chunks := text.Chunk(reply, 4)
+		if len(chunks) == 0 {
+			chunks = []string{""}
+		}
+		for _, part := range chunks {
+			writeSSE(w, map[string]any{
+				"id": id, "object": "text_completion", "model": model,
+				"choices": []map[string]any{{
+					"index": i, "text": part,
+				}},
+			})
+			flusher.Flush()
+		}
 		writeSSE(w, map[string]any{
 			"id": id, "object": "text_completion", "model": model,
 			"choices": []map[string]any{{
-				"index": 0, "text": part,
+				"index": i, "text": "", "finish_reason": "stop",
 			}},
 		})
 		flusher.Flush()
 	}
-
-	writeSSE(w, map[string]any{
-		"id": id, "object": "text_completion", "model": model,
-		"choices": []map[string]any{{
-			"index": 0, "text": "", "finish_reason": "stop",
-		}},
-	})
 	fmt.Fprint(w, "data: [DONE]\n\n")
 	flusher.Flush()
 }

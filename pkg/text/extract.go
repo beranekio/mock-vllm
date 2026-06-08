@@ -63,18 +63,55 @@ func ExtractCompletionPrompts(payload map[string]any) []string {
 	return []string{"mock"}
 }
 
-// ExtractEmbeddingInputs returns one string per embedding input (string or array).
-func ExtractEmbeddingInputs(payload map[string]any) []string {
+// EmbeddingInput is one element of an embeddings request (text or token IDs).
+type EmbeddingInput struct {
+	Text   string
+	Tokens []int
+}
+
+// Seed returns a deterministic byte for mock vector generation.
+func (e EmbeddingInput) Seed() byte {
+	if e.Text != "" {
+		return e.Text[0]
+	}
+	if len(e.Tokens) > 0 {
+		return byte((e.Tokens[0] + len(e.Tokens)) % 256)
+	}
+	return 'm'
+}
+
+// TokenCount estimates prompt tokens for usage blocks.
+func (e EmbeddingInput) TokenCount() int {
+	if len(e.Tokens) > 0 {
+		return len(e.Tokens)
+	}
+	in, _ := Usage(e.Text, "")
+	return in
+}
+
+// ExtractEmbeddingInputs returns one element per embedding input (string, token, or batched).
+func ExtractEmbeddingInputs(payload map[string]any) []EmbeddingInput {
 	switch v := payload["input"].(type) {
 	case string:
 		if v != "" {
-			return []string{v}
+			return []EmbeddingInput{{Text: v}}
 		}
 	case []any:
-		var inputs []string
+		if len(v) == 0 {
+			break
+		}
+		if _, ok := v[0].([]any); ok {
+			if inputs := extractEmbeddingTokenBatches(v); len(inputs) > 0 {
+				return inputs
+			}
+		}
+		if tokens, ok := parseTokenSlice(v); ok {
+			return []EmbeddingInput{{Tokens: tokens}}
+		}
+		var inputs []EmbeddingInput
 		for _, item := range v {
 			if s, ok := item.(string); ok && s != "" {
-				inputs = append(inputs, s)
+				inputs = append(inputs, EmbeddingInput{Text: s})
 			}
 		}
 		if len(inputs) > 0 {
@@ -85,7 +122,48 @@ func ExtractEmbeddingInputs(payload map[string]any) []string {
 	if text == "" {
 		text = "mock"
 	}
-	return []string{text}
+	return []EmbeddingInput{{Text: text}}
+}
+
+func extractEmbeddingTokenBatches(items []any) []EmbeddingInput {
+	var inputs []EmbeddingInput
+	for _, item := range items {
+		tokens, ok := parseTokenSlice(item)
+		if !ok {
+			return nil
+		}
+		inputs = append(inputs, EmbeddingInput{Tokens: tokens})
+	}
+	return inputs
+}
+
+func parseTokenSlice(v any) ([]int, bool) {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, false
+	}
+	tokens := make([]int, len(arr))
+	for i, item := range arr {
+		var val int
+		switch n := item.(type) {
+		case float64:
+			val = int(n)
+		case int:
+			val = n
+		case int64:
+			val = int(n)
+		case json.Number:
+			parsed, err := n.Int64()
+			if err != nil {
+				return nil, false
+			}
+			val = int(parsed)
+		default:
+			return nil, false
+		}
+		tokens[i] = val
+	}
+	return tokens, true
 }
 
 func extractFromInputArray(items []any) string {

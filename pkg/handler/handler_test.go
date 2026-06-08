@@ -128,6 +128,96 @@ func TestEmbeddings_batch(t *testing.T) {
 	}
 }
 
+func TestEmbeddings_tokenBatches(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","input":[[1,2],[3,4]]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	data, ok := resp["data"].([]any)
+	if !ok || len(data) != 2 {
+		t.Fatalf("data = %v, want 2 embeddings", resp["data"])
+	}
+	d0 := data[0].(map[string]any)
+	d1 := data[1].(map[string]any)
+	if d0["index"].(float64) != 0 || d1["index"].(float64) != 1 {
+		t.Fatalf("indices = %v, %v", d0["index"], d1["index"])
+	}
+	usage := resp["usage"].(map[string]any)
+	if usage["prompt_tokens"].(float64) != 4 || usage["total_tokens"].(float64) != 4 {
+		t.Fatalf("usage = %v, want 4 prompt/total tokens", usage)
+	}
+}
+
+func TestEmbeddings_tokenArray_usage(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","input":[1,2,3]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	usage := resp["usage"].(map[string]any)
+	if usage["prompt_tokens"].(float64) != 3 || usage["total_tokens"].(float64) != 3 {
+		t.Fatalf("usage = %v, want 3 prompt/total tokens", usage)
+	}
+}
+
+func TestCompletionsStream_batch(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","stream":true,"prompt":["hi","bye"]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	out, _ := io.ReadAll(rec.Body)
+	if !bytes.Contains(out, []byte("[DONE]")) {
+		t.Fatalf("missing [DONE] in stream: %s", out)
+	}
+
+	var indices []float64
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.HasPrefix(line, "data: ") || strings.Contains(line, "[DONE]") {
+			continue
+		}
+		var chunk map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &chunk); err != nil {
+			continue
+		}
+		choices, ok := chunk["choices"].([]any)
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		choice := choices[0].(map[string]any)
+		if idx, ok := choice["index"].(float64); ok {
+			indices = append(indices, idx)
+		}
+	}
+	if !slicesContains(indices, 0) || !slicesContains(indices, 1) {
+		t.Fatalf("stream indices = %v, want 0 and 1", indices)
+	}
+}
+
+func slicesContains(vals []float64, target float64) bool {
+	for _, v := range vals {
+		if v == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestResponses_structuredInput(t *testing.T) {
 	s := newTestServer()
 	body := `{"model":"test-model","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}`
