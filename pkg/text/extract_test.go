@@ -89,11 +89,14 @@ func TestExtractEmbeddingInputs_batch(t *testing.T) {
 
 func TestExtractEmbeddingInputs_tokenArray(t *testing.T) {
 	payload := map[string]any{
-		"input": []any{float64(1), float64(2), float64(3)},
+		"input": []any{float64(1), int(2), int64(3)},
 	}
 	got := ExtractEmbeddingInputs(payload)
-	if len(got) != 1 || len(got[0].Tokens) != 3 || got[0].Tokens[0] != 1 {
+	if len(got) != 1 || len(got[0].Tokens) != 3 || got[0].Tokens[0] != 1 || got[0].Tokens[1] != 2 || got[0].Tokens[2] != 3 {
 		t.Fatalf("ExtractEmbeddingInputs() = %v", got)
+	}
+	if got[0].TokenCount() != 3 {
+		t.Fatalf("TokenCount() = %d, want 3", got[0].TokenCount())
 	}
 }
 

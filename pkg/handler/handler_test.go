@@ -148,6 +148,27 @@ func TestEmbeddings_tokenBatches(t *testing.T) {
 	if d0["index"].(float64) != 0 || d1["index"].(float64) != 1 {
 		t.Fatalf("indices = %v, %v", d0["index"], d1["index"])
 	}
+	usage := resp["usage"].(map[string]any)
+	if usage["prompt_tokens"].(float64) != 4 || usage["total_tokens"].(float64) != 4 {
+		t.Fatalf("usage = %v, want 4 prompt/total tokens", usage)
+	}
+}
+
+func TestEmbeddings_tokenArray_usage(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","input":[1,2,3]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	usage := resp["usage"].(map[string]any)
+	if usage["prompt_tokens"].(float64) != 3 || usage["total_tokens"].(float64) != 3 {
+		t.Fatalf("usage = %v, want 3 prompt/total tokens", usage)
+	}
 }
 
 func TestCompletionsStream_batch(t *testing.T) {

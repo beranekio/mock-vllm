@@ -80,6 +80,15 @@ func (e EmbeddingInput) Seed() byte {
 	return 'm'
 }
 
+// TokenCount estimates prompt tokens for usage blocks.
+func (e EmbeddingInput) TokenCount() int {
+	if len(e.Tokens) > 0 {
+		return len(e.Tokens)
+	}
+	in, _ := Usage(e.Text, "")
+	return in
+}
+
 // ExtractEmbeddingInputs returns one element per embedding input (string, token, or batched).
 func ExtractEmbeddingInputs(payload map[string]any) []EmbeddingInput {
 	switch v := payload["input"].(type) {
@@ -135,11 +144,24 @@ func parseTokenSlice(v any) ([]int, bool) {
 	}
 	tokens := make([]int, len(arr))
 	for i, item := range arr {
-		n, ok := item.(float64)
-		if !ok {
+		var val int
+		switch n := item.(type) {
+		case float64:
+			val = int(n)
+		case int:
+			val = n
+		case int64:
+			val = int(n)
+		case json.Number:
+			parsed, err := n.Int64()
+			if err != nil {
+				return nil, false
+			}
+			val = int(parsed)
+		default:
 			return nil, false
 		}
-		tokens[i] = int(n)
+		tokens[i] = val
 	}
 	return tokens, true
 }

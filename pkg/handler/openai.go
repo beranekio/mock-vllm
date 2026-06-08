@@ -89,7 +89,9 @@ func (s *Server) embeddings(w http.ResponseWriter, payload map[string]any) {
 
 	dim := 8
 	data := make([]map[string]any, len(inputs))
+	var totalTokens int
 	for i, input := range inputs {
+		totalTokens += input.TokenCount()
 		vec := make([]float64, dim)
 		seed := input.Seed()
 		for j := range vec {
@@ -107,8 +109,8 @@ func (s *Server) embeddings(w http.ResponseWriter, payload map[string]any) {
 		"data":   data,
 		"model":  model,
 		"usage": map[string]int{
-			"prompt_tokens": len(inputs) * 4,
-			"total_tokens":  len(inputs) * 4,
+			"prompt_tokens": totalTokens,
+			"total_tokens":  totalTokens,
 		},
 	})
 }
