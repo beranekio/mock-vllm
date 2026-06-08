@@ -55,7 +55,7 @@ jobs:
             type=raw,value=latest,enable=${{ steps.tags.outputs.is_main_tip == 'true' }}
             type=raw,value=main,enable=${{ steps.tags.outputs.is_main_tip == 'true' }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           push: true
