@@ -301,6 +301,7 @@ func (s *Server) streamResponses(w http.ResponseWriter, model, reply string, inT
 		"output_index":    0,
 		"content_index":   0,
 		"text":            reply,
+		"logprobs":        []any{},
 	})
 	flusher.Flush()
 
