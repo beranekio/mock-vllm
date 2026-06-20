@@ -137,7 +137,7 @@ func (s *Server) getModel(w http.ResponseWriter, modelID string) {
 func (s *Server) inputTokens(w http.ResponseWriter, payload map[string]any) {
 	in, _ := text.Usage(text.ExtractTokenCountText(payload), "")
 	httpjson.Write(w, http.StatusOK, map[string]any{
-		"object":        "response.input_tokens",
+		"object":       "response.input_tokens",
 		"input_tokens": in,
 	})
 }
