@@ -150,21 +150,55 @@ func (s *Server) responses(w http.ResponseWriter, payload map[string]any) {
 		},
 	}
 
-	httpjson.Write(w, http.StatusOK, map[string]any{
-		"id":         id,
-		"object":     "response",
-		"status":     "completed",
-		"model":      model,
-		"created_at": created,
-		"output":     []map[string]any{item},
-		"usage": map[string]any{
-			"input_tokens":          inTok,
-			"input_tokens_details":  map[string]any{"cached_tokens": 0},
-			"output_tokens":         outTok,
-			"output_tokens_details": map[string]any{"reasoning_tokens": 0},
-			"total_tokens":          inTok + outTok,
-		},
-	})
+	httpjson.Write(w, http.StatusOK, s.responseEnvelope(id, model, created, "completed", []map[string]any{item}, map[string]any{
+		"input_tokens":          inTok,
+		"input_tokens_details":  map[string]any{"cached_tokens": 0},
+		"output_tokens":         outTok,
+		"output_tokens_details": map[string]any{"reasoning_tokens": 0},
+		"total_tokens":          inTok + outTok,
+	}))
+}
+
+// defaultMaxOutputTokens is the value reported on the Response envelope's
+// max_output_tokens field. The mock does not enforce a real cap; this mirrors
+// the integer that vLLM populates from its resolved sampling params.
+const defaultMaxOutputTokens = 4096
+
+// responseEnvelope builds the /v1/responses Response object with the default
+// optional fields populated. It mirrors the fields vLLM's ResponsesResponse
+// model emits (vllm/entrypoints/openai/responses/protocol.py): every field
+// vLLM marks required is present here, and fields vLLM omits (error, store,
+// completed_at, conversation) are omitted too. status/output/usage vary
+// across the response lifecycle (in_progress snapshots vs the terminal
+// completed event), so they are parameters.
+func (s *Server) responseEnvelope(id, model string, createdAt int64, status string, output []map[string]any, usage map[string]any) map[string]any {
+	envelope := map[string]any{
+		"id":                  id,
+		"object":              "response",
+		"created_at":          createdAt,
+		"status":              status,
+		"model":               model,
+		"output":              output,
+		"parallel_tool_calls": true,
+		"tool_choice":         "auto",
+		"tools":               []any{},
+		"temperature":         1.0,
+		"top_p":               1.0,
+		"max_output_tokens":   defaultMaxOutputTokens,
+		"background":          false,
+		"truncation":          "disabled",
+		"service_tier":        "auto",
+		// Nullable fields vLLM emits as None by default.
+		"instructions":       nil,
+		"metadata":           nil,
+		"incomplete_details": nil,
+		"max_tool_calls":     nil,
+		"user":               nil,
+	}
+	if usage != nil {
+		envelope["usage"] = usage
+	}
+	return envelope
 }
 
 func (s *Server) streamResponses(w http.ResponseWriter, model, reply string, inTok, outTok int) {
@@ -217,14 +251,7 @@ func (s *Server) streamResponses(w http.ResponseWriter, model, reply string, inT
 	writeSSE(w, map[string]any{
 		"type":            "response.created",
 		"sequence_number": next(),
-		"response": map[string]any{
-			"id":         id,
-			"object":     "response",
-			"status":     "in_progress",
-			"model":      model,
-			"created_at": created,
-			"output":     []any{},
-		},
+		"response":        s.responseEnvelope(id, model, created, "in_progress", []map[string]any{}, nil),
 	})
 	flusher.Flush()
 
@@ -236,14 +263,7 @@ func (s *Server) streamResponses(w http.ResponseWriter, model, reply string, inT
 	writeSSE(w, map[string]any{
 		"type":            "response.in_progress",
 		"sequence_number": next(),
-		"response": map[string]any{
-			"id":         id,
-			"object":     "response",
-			"status":     "in_progress",
-			"model":      model,
-			"created_at": created,
-			"output":     []any{},
-		},
+		"response":        s.responseEnvelope(id, model, created, "in_progress", []map[string]any{}, nil),
 	})
 	flusher.Flush()
 
@@ -334,21 +354,13 @@ func (s *Server) streamResponses(w http.ResponseWriter, model, reply string, inT
 	writeSSE(w, map[string]any{
 		"type":            "response.completed",
 		"sequence_number": next(),
-		"response": map[string]any{
-			"id":         id,
-			"object":     "response",
-			"status":     "completed",
-			"model":      model,
-			"created_at": created,
-			"output":     []map[string]any{item},
-			"usage": map[string]any{
-				"input_tokens":          inTok,
-				"input_tokens_details":  map[string]any{"cached_tokens": 0},
-				"output_tokens":         outTok,
-				"output_tokens_details": map[string]any{"reasoning_tokens": 0},
-				"total_tokens":          inTok + outTok,
-			},
-		},
+		"response": s.responseEnvelope(id, model, created, "completed", []map[string]any{item}, map[string]any{
+			"input_tokens":          inTok,
+			"input_tokens_details":  map[string]any{"cached_tokens": 0},
+			"output_tokens":         outTok,
+			"output_tokens_details": map[string]any{"reasoning_tokens": 0},
+			"total_tokens":          inTok + outTok,
+		}),
 	})
 	flusher.Flush()
 
