@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -50,11 +51,15 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	case "/v1/models":
 		s.listModels(w)
 	default:
-		// Handle GET /v1/models/{id}
-		if rest, ok := strings.CutPrefix(r.URL.Path, "/v1/models/"); ok {
-			if id, _, hasSlash := strings.Cut(rest, "/"); id != "" && !hasSlash {
-				s.getModel(w, id)
-				return
+		// Handle GET /v1/models/{id}. Route on the escaped path so that
+		// model IDs containing slashes (e.g. "org/repo") are retrieved as
+		// a single segment when percent-encoded by the client.
+		if rest, ok := strings.CutPrefix(r.URL.EscapedPath(), "/v1/models/"); ok {
+			if raw, _, hasSlash := strings.Cut(rest, "/"); raw != "" && !hasSlash {
+				if id, err := url.PathUnescape(raw); err == nil {
+					s.getModel(w, id)
+					return
+				}
 			}
 		}
 		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "not found"})
