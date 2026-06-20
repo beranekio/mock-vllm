@@ -45,6 +45,55 @@ func TestModels(t *testing.T) {
 	}
 }
 
+func TestGetModel_singleSegment(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/test-model", nil)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["id"] != "test-model" {
+		t.Fatalf("id = %v, want test-model", body["id"])
+	}
+}
+
+func TestGetModel_nestedPathReturns404(t *testing.T) {
+	s := newTestServer()
+	for _, path := range []string{"/v1/models/foo/bar", "/v1/models/foo/"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s: status = %d, want 404", path, rec.Code)
+		}
+	}
+}
+
+func TestGetModel_encodedSlashInID(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models/meta-llama%2FLlama-3", nil)
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["id"] != "meta-llama/Llama-3" {
+		t.Fatalf("id = %v, want meta-llama/Llama-3", body["id"])
+	}
+}
+
 func TestChatCompletions(t *testing.T) {
 	s := newTestServer()
 	body := `{"model":"test-model","messages":[{"role":"user","content":"hi"}]}`

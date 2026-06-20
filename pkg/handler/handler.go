@@ -4,6 +4,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/beranekio/mock-vllm/pkg/config"
@@ -49,6 +51,17 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	case "/v1/models":
 		s.listModels(w)
 	default:
+		// Handle GET /v1/models/{id}. Route on the escaped path so that
+		// model IDs containing slashes (e.g. "org/repo") are retrieved as
+		// a single segment when percent-encoded by the client.
+		if rest, ok := strings.CutPrefix(r.URL.EscapedPath(), "/v1/models/"); ok {
+			if raw, _, hasSlash := strings.Cut(rest, "/"); raw != "" && !hasSlash {
+				if id, err := url.PathUnescape(raw); err == nil {
+					s.getModel(w, id)
+					return
+				}
+			}
+		}
 		httpjson.Write(w, http.StatusNotFound, map[string]string{"error": "not found"})
 	}
 }
@@ -105,19 +118,32 @@ func isAnthropicPath(path string) bool {
 func (s *Server) listModels(w http.ResponseWriter) {
 	httpjson.Write(w, http.StatusOK, map[string]any{
 		"object": "list",
-		"data": []map[string]string{
+		"data": []map[string]any{
 			{
 				"id":       s.cfg.DefaultModel,
 				"object":   "model",
 				"owned_by": "mock-vllm",
+				"created":  time.Now().Unix(),
 			},
 		},
 	})
 }
 
+func (s *Server) getModel(w http.ResponseWriter, modelID string) {
+	httpjson.Write(w, http.StatusOK, map[string]any{
+		"id":       modelID,
+		"object":   "model",
+		"owned_by": "mock-vllm",
+		"created":  time.Now().Unix(),
+	})
+}
+
 func (s *Server) inputTokens(w http.ResponseWriter, payload map[string]any) {
 	in, _ := text.Usage(text.ExtractTokenCountText(payload), "")
-	httpjson.Write(w, http.StatusOK, map[string]int{"input_tokens": in})
+	httpjson.Write(w, http.StatusOK, map[string]any{
+		"object":       "response.input_tokens",
+		"input_tokens": in,
+	})
 }
 
 func (s *Server) countTokens(w http.ResponseWriter, payload map[string]any) {

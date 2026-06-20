@@ -28,12 +28,6 @@ func serverRoot(t *testing.T) string {
 	return strings.TrimRight(srv.URL, "/")
 }
 
-// openAIBaseURL is the OpenAI SDK base URL (paths are relative to /v1/).
-func openAIBaseURL(t *testing.T) string {
-	t.Helper()
-	return serverRoot(t) + "/v1"
-}
-
 // anthropicBaseURL is the Anthropic SDK base URL (paths include v1/messages).
 func anthropicBaseURL(t *testing.T) string {
 	t.Helper()
