@@ -132,6 +132,8 @@ When `stream: true`, the mock emits the canonical OpenAI Responses event sequenc
 
 Every event includes a monotonically increasing `sequence_number` starting at 0 (`response.created` is `sequence_number: 0`). Non-streaming responses follow the same envelope (`object: "response"`, `status: "completed"`, populated `usage` and per-part `annotations` and `logprobs`) so SDKs and tests can share a single shape check. Each `output_text` content part and the `response.output_text.done` event carry an empty `logprobs` array (the mock produces no logprobs); the `response.output_text.delta` events omit `logprobs` (they carry `delta` plus the standard `item_id`/`output_index`/`content_index`/`sequence_number` fields).
 
+The Response envelope (both non-streaming and the `response.completed` streamed event) populates the default optional fields vLLM emits: `parallel_tool_calls: true`, `tool_choice: "auto"`, `tools: []`, `temperature: 1.0`, `top_p: 1.0`, `max_output_tokens: 4096`, `background: false`, `truncation: "disabled"`, `service_tier: "auto"`, and nullables `instructions`, `metadata`, `incomplete_details`, `max_tool_calls`, `user`. Fields vLLM does not emit (`error`, `store`, `completed_at`, `conversation`) are omitted so the mock matches vLLM's `ResponsesResponse` rather than the full OpenAI SDK shape.
+
 ## Development
 
 ```bash

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -322,6 +323,56 @@ func TestResponses_nonStream_includesUsageAndAnnotations(t *testing.T) {
 	}
 }
 
+// TestResponses_nonStream_envelopeDefaultFields asserts the Response envelope
+// carries the default optional fields vLLM emits (see issue #34), with
+// vLLM-accurate defaults. Fields vLLM omits (error, store, completed_at,
+// conversation) must be absent so the mock matches vLLM, not the OpenAI SDK.
+func TestResponses_nonStream_envelopeDefaultFields(t *testing.T) {
+	s := newTestServer()
+	body := `{"model":"test-model","input":"hi"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, req)
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+
+	want := map[string]any{
+		"parallel_tool_calls": true,
+		"tool_choice":         "auto",
+		"tools":               []any{},
+		"temperature":         1.0,
+		"top_p":               1.0,
+		"max_output_tokens":   float64(defaultMaxOutputTokens),
+		"background":          false,
+		"truncation":          "disabled",
+		"service_tier":        "auto",
+	}
+	for k, wantVal := range want {
+		got, ok := resp[k]
+		if !ok {
+			t.Fatalf("envelope missing %q: %v", k, resp)
+		}
+		if !reflect.DeepEqual(got, wantVal) {
+			t.Fatalf("envelope %q = %v (%T), want %v (%T)", k, got, got, wantVal, wantVal)
+		}
+	}
+	// Nullable fields are present and null.
+	for _, k := range []string{"instructions", "metadata", "incomplete_details", "max_tool_calls", "user"} {
+		if v, ok := resp[k]; !ok || v != nil {
+			t.Fatalf("envelope %q = %v, want nil", k, v)
+		}
+	}
+	// Fields vLLM does not emit must be absent.
+	for _, k := range []string{"error", "store", "completed_at", "conversation"} {
+		if _, ok := resp[k]; ok {
+			t.Fatalf("envelope should not include %q (vLLM omits it): %v", k, resp)
+		}
+	}
+}
+
 func TestResponses_nonStream_usageCountsFullPrompt(t *testing.T) {
 	s := newTestServer()
 	// Multi-turn body: short final user turn, but a long system prompt and
@@ -530,6 +581,53 @@ func TestResponsesStream_eventOrderAndShape(t *testing.T) {
 	}
 	if len(logprobs) != 0 {
 		t.Fatalf("response.output_text.done logprobs = %v, want empty array", logprobs)
+	}
+
+	// response.completed carries the full envelope with the same default
+	// optional fields as the non-streaming Response (issue #34).
+	var completedEvent map[string]any
+	for _, ev := range events {
+		if ev["type"] == "response.completed" {
+			completedEvent = ev
+			break
+		}
+	}
+	if completedEvent == nil {
+		t.Fatalf("missing response.completed event in: %v", eventTypes(events))
+	}
+	completedResp, ok := completedEvent["response"].(map[string]any)
+	if !ok {
+		t.Fatalf("response.completed missing response object: %v", completedEvent)
+	}
+	want := map[string]any{
+		"parallel_tool_calls": true,
+		"tool_choice":         "auto",
+		"tools":               []any{},
+		"temperature":         1.0,
+		"top_p":               1.0,
+		"max_output_tokens":   float64(defaultMaxOutputTokens),
+		"background":          false,
+		"truncation":          "disabled",
+		"service_tier":        "auto",
+	}
+	for k, wantVal := range want {
+		got, ok := completedResp[k]
+		if !ok {
+			t.Fatalf("streamed envelope missing %q: %v", k, completedResp)
+		}
+		if !reflect.DeepEqual(got, wantVal) {
+			t.Fatalf("streamed envelope %q = %v (%T), want %v (%T)", k, got, got, wantVal, wantVal)
+		}
+	}
+	for _, k := range []string{"instructions", "metadata", "incomplete_details", "max_tool_calls", "user"} {
+		if v, ok := completedResp[k]; !ok || v != nil {
+			t.Fatalf("streamed envelope %q = %v, want nil", k, v)
+		}
+	}
+	for _, k := range []string{"error", "store", "completed_at", "conversation"} {
+		if _, ok := completedResp[k]; ok {
+			t.Fatalf("streamed envelope should not include %q (vLLM omits it): %v", k, completedResp)
+		}
 	}
 }
 
