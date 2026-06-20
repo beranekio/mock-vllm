@@ -183,6 +183,12 @@ func ExtractTokenCountText(payload map[string]any) string {
 	if sys := extractSystem(payload["system"]); sys != "" {
 		parts = append(parts, sys)
 	}
+	// Responses API uses `instructions` for the system/developer prompt
+	// (string or array of content parts). Include it so usage and
+	// /v1/responses/input_tokens reflect the full prompt.
+	if ins := extractMessageContent(payload["instructions"]); ins != "" {
+		parts = append(parts, ins)
+	}
 	if v, ok := payload["input"].(string); ok && v != "" {
 		parts = append(parts, v)
 	}
@@ -288,7 +294,7 @@ func extractContentBlocks(blocks []any) string {
 			continue
 		}
 		switch blockType, _ := b["type"].(string); blockType {
-		case "text", "input_text":
+		case "text", "input_text", "output_text":
 			if t, _ := b["text"].(string); t != "" {
 				parts = append(parts, t)
 			}
