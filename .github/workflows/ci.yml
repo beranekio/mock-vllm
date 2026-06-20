@@ -74,7 +74,7 @@ jobs:
             ghcr.io/beranekio/openai-compatibility-tester:latest
 
       - name: Run Anthropic integration tests
-        run: INTEGRATION_BASE_URL=http://127.0.0.1:8000 go test -race -count=1 ./integration/...
+        run: INTEGRATION_BASE_URL=http://127.0.0.1:18000 go test -race -count=1 ./integration/...
 
       - name: Remove container
         if: always()
