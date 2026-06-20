@@ -54,12 +54,18 @@ jobs:
 
       - name: Health check
         run: |
+          ok=1
           for i in $(seq 1 30); do
             if curl -sf http://127.0.0.1:18000/health >/dev/null; then
+              ok=0
               break
             fi
             sleep 1
           done
+          if [ "$ok" -ne 0 ]; then
+            echo "mock-vllm did not become healthy within 30s" >&2
+            exit 1
+          fi
 
       - name: Run OpenAI compatibility tests
         run: |

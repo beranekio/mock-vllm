@@ -51,10 +51,9 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 		s.listModels(w)
 	default:
 		// Handle GET /v1/models/{id}
-		if strings.HasPrefix(r.URL.Path, "/v1/models/") {
-			modelID := strings.TrimPrefix(r.URL.Path, "/v1/models/")
-			if modelID != "" {
-				s.getModel(w, modelID)
+		if rest, ok := strings.CutPrefix(r.URL.Path, "/v1/models/"); ok {
+			if id, _, hasSlash := strings.Cut(rest, "/"); id != "" && !hasSlash {
+				s.getModel(w, id)
 				return
 			}
 		}
