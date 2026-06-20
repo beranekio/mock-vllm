@@ -130,7 +130,7 @@ When `stream: true`, the mock emits the canonical OpenAI Responses event sequenc
 8. `response.output_item.done` — closing the item, `status: completed`
 9. `response.completed` — terminal event with the full `Response` (including `usage`)
 
-Every event includes a monotonically increasing `sequence_number` starting at 0 (`response.created` is `sequence_number: 0`). Non-streaming responses follow the same envelope (`object: "response"`, `status: "completed"`, populated `usage` and per-part `annotations` and `logprobs`) so SDKs and tests can share a single shape check. Each `output_text` content part carries an empty `logprobs` array (the mock produces no logprobs); the `response.output_text.delta`/`.done` events carry only `delta`/`text` and do not include `logprobs`, matching the upstream stream shape.
+Every event includes a monotonically increasing `sequence_number` starting at 0 (`response.created` is `sequence_number: 0`). Non-streaming responses follow the same envelope (`object: "response"`, `status: "completed"`, populated `usage` and per-part `annotations` and `logprobs`) so SDKs and tests can share a single shape check. Each `output_text` content part and the `response.output_text.done` event carry an empty `logprobs` array (the mock produces no logprobs); the `response.output_text.delta` events omit `logprobs` (they carry `delta` plus the standard `item_id`/`output_index`/`content_index`/`sequence_number` fields).
 
 ## Development
 

@@ -510,6 +510,27 @@ func TestResponsesStream_eventOrderAndShape(t *testing.T) {
 			t.Fatalf("event %d part missing logprobs: %v", idx, part)
 		}
 	}
+
+	// response.output_text.done carries an (empty) logprobs array, as required
+	// by the openai-compatibility-tester responses_stream suite. Find the event
+	// by type rather than index — the number of delta events depends on chunking.
+	var doneEvent map[string]any
+	for _, ev := range events {
+		if ev["type"] == "response.output_text.done" {
+			doneEvent = ev
+			break
+		}
+	}
+	if doneEvent == nil {
+		t.Fatalf("missing response.output_text.done event in: %v", eventTypes(events))
+	}
+	logprobs, ok := doneEvent["logprobs"].([]any)
+	if !ok {
+		t.Fatalf("response.output_text.done logprobs is not a JSON array: %v", doneEvent["logprobs"])
+	}
+	if len(logprobs) != 0 {
+		t.Fatalf("response.output_text.done logprobs = %v, want empty array", logprobs)
+	}
 }
 
 func eventTypes(events []map[string]any) []string {
