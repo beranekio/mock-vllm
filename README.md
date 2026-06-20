@@ -56,10 +56,10 @@ go test -race ./integration/...
 INTEGRATION_BASE_URL=http://127.0.0.1:8000 go test -race ./integration/...
 ```
 
-**OpenAI-compatible API** tests use the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container to validate all OpenAI endpoints:
+**OpenAI-compatible API** tests use the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container to validate all supported OpenAI-compatible endpoints:
 
 ```bash
-# Run all OpenAI compatibility tests against a local container or binary
+# Run the supported OpenAI compatibility tests against a local container or binary
 docker run --rm \
   -e OPENAI_BASE_URL=http://127.0.0.1:8000/v1 \
   -e OPENAI_API_KEY=test-key \
