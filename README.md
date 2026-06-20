@@ -59,14 +59,22 @@ INTEGRATION_BASE_URL=http://127.0.0.1:8000 go test -race ./integration/...
 **OpenAI-compatible API** tests use the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container to validate all supported OpenAI-compatible endpoints:
 
 ```bash
-# Run the supported OpenAI compatibility tests against a local container or binary
-docker run --rm \
+# Run the supported OpenAI compatibility tests against a local container or binary.
+# The tester container runs in a separate network namespace from the host where
+# mock-vllm is listening, so use --network host to share the host network and
+# address it via the loopback.
+docker run --rm --network host \
   -e OPENAI_BASE_URL=http://127.0.0.1:8000/v1 \
   -e OPENAI_API_KEY=test-key \
   -e OPENAI_MODEL=mock-model \
-  -e TEST_SUITES=extended \
+  -e OPENAI_EMBEDDING_MODEL=mock-model \
+  -e OPENAI_COMPLETION_MODEL=mock-model \
+  -e TEST_SUITES=models,models_get,chat_completions,chat_completions_stream,completions,completions_stream,embeddings,embeddings_batch,responses,responses_input_tokens \
+  -e REQUEST_TIMEOUT=30s \
   ghcr.io/beranekio/openai-compatibility-tester:latest
 ```
+
+The supported suite list mirrors what CI runs (`.github/workflows/ci.yml`); the `extended` preset includes image, audio, and tool suites that mock-vllm does not implement, so use the explicit list above.
 
 ## Configuration
 
@@ -107,7 +115,7 @@ go test -race ./...
 gofmt -w .
 ```
 
-CI runs unit tests, Anthropic SDK integration tests (in-process), and OpenAI compatibility tests via the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container on every push/PR to `main`. Successful merges to `main` also trigger a GHCR publish workflow (`.github/workflows/publish-docker.yml`).
+CI runs unit tests, Anthropic SDK integration tests against a running mock-vllm container, and OpenAI compatibility tests via the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container on every push/PR to `main`. Successful merges to `main` also trigger a GHCR publish workflow (`.github/workflows/publish-docker.yml`).
 
 ## License
 
