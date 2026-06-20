@@ -47,13 +47,25 @@ Tags: `latest`, the short commit SHA, and `main`. On first publish, set the pack
 
 ### Integration tests
 
-SDK integration tests use the official [OpenAI Go SDK](https://github.com/openai/openai-go) and [Anthropic Go SDK](https://github.com/anthropics/anthropic-sdk-go). By default they spin up an in-process `httptest` server; set `INTEGRATION_BASE_URL` to test a running instance (e.g. Docker):
+**Anthropic Messages API** tests use the official [Anthropic Go SDK](https://github.com/anthropics/anthropic-sdk-go). By default they spin up an in-process `httptest` server; set `INTEGRATION_BASE_URL` to test a running instance (e.g. Docker):
 
 ```bash
 go test -race ./integration/...
 
 # against a container or local binary on port 8000:
 INTEGRATION_BASE_URL=http://127.0.0.1:8000 go test -race ./integration/...
+```
+
+**OpenAI-compatible API** tests use the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container to validate all OpenAI endpoints:
+
+```bash
+# Run all OpenAI compatibility tests against a local container or binary
+docker run --rm \
+  -e OPENAI_BASE_URL=http://127.0.0.1:8000/v1 \
+  -e OPENAI_API_KEY=test-key \
+  -e OPENAI_MODEL=mock-model \
+  -e TEST_SUITES=extended \
+  ghcr.io/beranekio/openai-compatibility-tester:latest
 ```
 
 ## Configuration
@@ -95,7 +107,7 @@ go test -race ./...
 gofmt -w .
 ```
 
-CI runs unit tests, SDK integration tests (in-process), and Docker integration tests on every push/PR to `main`. Successful merges to `main` also trigger a GHCR publish workflow (`.github/workflows/publish-docker.yml`).
+CI runs unit tests, Anthropic SDK integration tests (in-process), and OpenAI compatibility tests via the [openai-compatibility-tester](https://github.com/beranekio/openai-compatibility-tester) container on every push/PR to `main`. Successful merges to `main` also trigger a GHCR publish workflow (`.github/workflows/publish-docker.yml`).
 
 ## License
 
