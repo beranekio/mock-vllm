@@ -69,6 +69,9 @@ jobs:
 
       - name: Run OpenAI compatibility tests
         run: |
+          # The tester image is pinned to the manifest-list digest of
+          # `:latest` to make CI reproducible. Bump the digest
+          # intentionally when the upstream tester image is updated.
           docker run --rm --network host \
             -e OPENAI_BASE_URL=http://127.0.0.1:18000/v1 \
             -e OPENAI_API_KEY=test-key \
@@ -77,7 +80,7 @@ jobs:
             -e OPENAI_COMPLETION_MODEL=mock-model \
             -e TEST_SUITES=models,models_get,chat_completions,chat_completions_stream,completions,completions_stream,embeddings,embeddings_batch,responses,responses_input_tokens \
             -e REQUEST_TIMEOUT=30s \
-            ghcr.io/beranekio/openai-compatibility-tester:latest
+            ghcr.io/beranekio/openai-compatibility-tester@sha256:683a7cc5798547656b8ec8c9c1b54ab2dcf13ec6ba2dbf3a5bed299157213274
 
       - name: Run Anthropic integration tests
         run: INTEGRATION_BASE_URL=http://127.0.0.1:18000 go test -race -count=1 ./integration/...
