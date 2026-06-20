@@ -100,6 +100,30 @@ curl -s http://localhost:8000/v1/messages \
   -d '{"model":"mock-model","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}'
 ```
 
+**OpenAI responses** (streaming emits the typed Responses event sequence; the non-streaming response is a single `Response` object)
+
+```bash
+curl -sN http://localhost:8000/v1/responses \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"mock-model","stream":true,"input":"hi"}'
+```
+
+### `/v1/responses` streaming contract
+
+When `stream: true`, the mock emits the canonical OpenAI Responses event sequence as `text/event-stream` SSE, with one JSON payload per `data:` line:
+
+1. `response.created` — empty `output`, `status: in_progress`
+2. `response.in_progress` — same response object, still no output (mirrors `response.created`; emitted between created and the first item, matching the documented OpenAI Responses lifecycle)
+3. `response.output_item.added` — assistant message skeleton, `status: in_progress`
+4. `response.content_part.added` — first `output_text` part
+5. `response.output_text.delta` (one or more) — accumulated reply chunks
+6. `response.output_text.done` — final text
+7. `response.content_part.done` — closing the part
+8. `response.output_item.done` — closing the item, `status: completed`
+9. `response.completed` — terminal event with the full `Response` (including `usage`)
+
+Every event includes a monotonically increasing `sequence_number` starting at 0 (`response.created` is `sequence_number: 0`). Non-streaming responses follow the same envelope (`object: "response"`, `status: "completed"`, populated `usage` and per-part `annotations` and `logprobs`) so SDKs and tests can share a single shape check. Each `output_text` content part carries an empty `logprobs` array (the mock produces no logprobs); the `response.output_text.delta`/`.done` events carry only `delta`/`text` and do not include `logprobs`, matching the upstream stream shape.
+
 ## Development
 
 ```bash

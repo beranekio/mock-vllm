@@ -167,6 +167,66 @@ func TestExtractTokenCountText_scalesWithInputSize(t *testing.T) {
 	}
 }
 
+func TestExtractTokenCountText_includesOutputTextBlocks(t *testing.T) {
+	// When a client passes a prior assistant message back in a structured
+	// input, the part type is `output_text` (not `text` or `input_text`).
+	// Token counting must include those blocks so multi-turn Responses
+	// histories report the same usage as the input_tokens endpoint.
+	payload := map[string]any{
+		"messages": []any{
+			map[string]any{"role": "user", "content": "hi"},
+			map[string]any{
+				"role": "assistant",
+				"content": []any{
+					map[string]any{"type": "output_text", "text": strings.Repeat("y", 200)},
+				},
+			},
+			map[string]any{"role": "user", "content": "again"},
+		},
+	}
+	got := ExtractTokenCountText(payload)
+	if !strings.Contains(got, strings.Repeat("y", 200)) {
+		t.Fatalf("missing output_text block: %q", got)
+	}
+	full, _ := Usage(got, "")
+	lastUser, _ := Usage(ExtractInput(payload), "")
+	if full <= lastUser {
+		t.Fatalf("full count %d should exceed last-user-only %d (output_text blocks are being skipped)", full, lastUser)
+	}
+}
+
+func TestExtractTokenCountText_includesInstructions(t *testing.T) {
+	// Responses API uses `instructions` (not `system`) for the developer
+	// prompt. It can be a plain string or an array of content parts.
+	// Token counting must include it so /v1/responses and
+	// /v1/responses/input_tokens reflect the full prompt.
+	long := strings.Repeat("i", 400)
+	stringPayload := map[string]any{
+		"instructions": long,
+		"input":        "hi",
+	}
+	gotString := ExtractTokenCountText(stringPayload)
+	if !strings.Contains(gotString, long) {
+		t.Fatalf("missing string instructions: %q", gotString)
+	}
+	withInstructions, _ := Usage(gotString, "")
+	withoutInstructions, _ := Usage(ExtractTokenCountText(map[string]any{"input": "hi"}), "")
+	if withInstructions <= withoutInstructions {
+		t.Fatalf("with instructions=%d, without=%d (want with > without)", withInstructions, withoutInstructions)
+	}
+
+	structuredPayload := map[string]any{
+		"instructions": []any{
+			map[string]any{"type": "input_text", "text": strings.Repeat("j", 300)},
+		},
+		"input": "hi",
+	}
+	gotStructured := ExtractTokenCountText(structuredPayload)
+	if !strings.Contains(gotStructured, strings.Repeat("j", 300)) {
+		t.Fatalf("missing structured instructions: %q", gotStructured)
+	}
+}
+
 func TestShouldDelay(t *testing.T) {
 	if !ShouldDelay([]byte(`{"input":"tell me about otters"}`), []string{"otter"}) {
 		t.Fatal("expected slow delay marker match")
