@@ -3,7 +3,7 @@ module github.com/beranekio/mock-vllm
 go 1.24
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.66.0
+	github.com/anthropics/anthropic-sdk-go v1.68.0
 	github.com/google/uuid v1.6.0
 )
 
